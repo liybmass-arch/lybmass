@@ -1122,4 +1122,124 @@ function isDesk() { try { return window.matchMedia("(min-width:900px)").matches;
       if (!appOk() && !CARE.safe) { if (boot(false)) CARE.healed++; }
       add(CARE.safe ? "warn" : "ok", tr("نمایش صفحه", "Page rendering"), CARE.safe ? tr("حالت ایمن فعال است", "Safe mode is on") : CARE.healed ? tr("خطا پیدا و خودکار رفع شد", "An error was found and fixed") : tr("سالم", "Healthy"));
       /* 2. data */
-      add(DEMO ? "warn" : "ok", tr("اطلاعات اشتراک", "Subscription data"), DEMO ? tr("پیش‌نمایش با داده‌ی نمونه", "Preview 
+      add(DEMO ? "warn" : "ok", tr("اطلاعات اشتراک", "Subscription data"), DEMO ? tr("پیش‌نمایش با داده‌ی نمونه", "Preview with sample data") : tr("از پنل دریافت شد", "Received from the panel"));
+      /* 3. status */
+      var stt = M ? M.status : "active", bad = stt === "expired" || stt === "limited" || stt === "disabled";
+      add(bad ? "bad" : M && M.near ? "warn" : "ok", tr("وضعیت اشتراک", "Subscription status"),
+        bad ? tr("برای تمدید از دکمه‌ی عضویت در کانال پیام بده", "Use the channel button to renew") : M && M.near ? tr("رو به اتمام؛ زودتر تمدید کن", "Running low; renew soon") : tr("فعال و معتبر", "Active and valid"));
+      /* 4. configs */
+      var nc = M ? M.links.length : 0;
+      add(nc ? "ok" : "bad", tr("کانفیگ‌ها", "Configs"), nc ? nc + " " + tr("کانفیگ آماده", "ready") : tr("کانفیگی نیست؛ به پشتیبانی خبر بده", "None; contact support"));
+      /* 5. internet */
+      var online = navigator.onLine !== false;
+      add(online ? "ok" : "bad", tr("اینترنت دستگاه", "Device internet"), online ? tr("وصل", "Connected") : tr("قطع است؛ اینترنت را روشن کن", "Offline; turn on your internet"));
+      /* 6. storage (auto-clean bad values) */
+      var okS = true; try { localStorage.setItem("jx-t", "1"); okS = localStorage.getItem("jx-t") === "1"; localStorage.removeItem("jx-t"); } catch (e) { okS = false; }
+      var th = S.get("jx-theme"), lg = S.get("jx-lang"), fixedS = false;
+      if (th && th !== "dark" && th !== "light") { S.set("jx-theme", "dark"); fixedS = true; }
+      if (lg && lg !== "fa" && lg !== "en") { S.set("jx-lang", "fa"); fixedS = true; }
+      if (fixedS) CARE.healed++;
+      add(okS ? "ok" : "warn", tr("تنظیمات صفحه", "Page settings"), !okS ? tr("ذخیره نمی‌شود (حالت خصوصی مرورگر)", "Not saved (private browsing)") : fixedS ? tr("تنظیمات خراب پاک شد", "Corrupt settings cleaned") : tr("سالم", "Healthy"));
+      /* 7. clipboard */
+      var clip = !!(window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText);
+      add(clip ? "ok" : "warn", tr("کپی", "Copy"), clip ? tr("کپی مستقیم فعال", "Direct copy available") : tr("روش جایگزین فعال شد", "Fallback method enabled"));
+      /* 7b. config links are valid (exact copy is guaranteed, this only reports broken ones) */
+      if (M && M.links.length) {
+        var badL = (D && Array.isArray(D.links) ? D.links.length : 0) - M.links.length;
+        add(badL > 0 ? "warn" : "ok", tr("سلامت کانفیگ‌ها", "Config integrity"), badL > 0 ? badL + tr(" لینک نامعتبر کنار گذاشته شد", " invalid link(s) skipped") : tr("همه معتبر و دست‌نخورده", "All valid and untouched"));
+      }
+      /* 7c. layout: no sideways scroll on any screen (auto-fix) */
+      var ow = (document.documentElement && document.documentElement.scrollWidth || 0) - (window.innerWidth || 0);
+      if (ow > 1 && !root.classList.contains("fixx")) { root.classList.add("fixx"); CARE.healed++; }
+      add("ok", tr("چیدمان صفحه", "Layout"), ow > 1 ? tr("بیرون‌زدگی پیدا و رفع شد", "Overflow found and fixed") : (isDesk() ? tr("نسخه‌ی کامپیوتر", "Desktop layout") : tr("نسخه‌ی موبایل", "Mobile layout")));
+      /* 7d. smoothness: slow devices get the light mode automatically */
+      add("ok", tr("روانی انیمیشن", "Smoothness"), CARE.fps ? CARE.fps + " fps" + (root.classList.contains("lite") ? tr(" · حالت سبک فعال شد", " · light mode on") : "") : tr("سالم", "Healthy"));
+      /* 7e. font */
+      var fontOk = true; try { fontOk = !document.fonts || !document.fonts.check || document.fonts.check('12px "Vazirmatn"'); } catch (e) {}
+      add("ok", tr("فونت فارسی", "Persian font"), fontOk ? tr("بارگذاری شد", "Loaded") : tr("فونت سیستم (سالم)", "System font (fine)"));
+      /* 8 + 9. server, ping and device clock (VMess fails if the clock is off) */
+      measure(function () {
+        var p = st.ping;
+        add(p == null || p < 0 ? "bad" : p <= 150 ? "ok" : p <= 400 ? "warn" : "bad", tr("سرور و پینگ", "Server and ping"),
+          p == null || p < 0 ? tr("پاسخ نداد؛ تلاش دوباره خودکار است", "No answer; auto-retrying") : p + " ms" + (p > 400 ? tr(" · کانفیگ دیگری را امتحان کن", " · try another config") : ""));
+        var skew = 0;
+        if (!DEMO && lastHealth && lastHealth.date) { var sd = Date.parse(lastHealth.date); if (isFinite(sd)) skew = Math.abs(Date.now() - sd) / 1000; }
+        add(skew > 90 ? "bad" : "ok", tr("ساعت دستگاه", "Device clock"), skew > 90 ? tr("ساعت گوشی دقیق نیست؛ روی خودکار بگذار", "Clock is off; set it to automatic") : tr("دقیق", "Accurate"));
+        if (DEMO) { add("ok", tr("سرویس QR", "QR service"), tr("پیش‌نمایش", "Preview")); finish(out); return; }
+        probe("/jinx-api/qr?d=jinx", 4000).then(function (r) {
+          add(r.ok ? "ok" : "warn", tr("سرویس QR", "QR service"), r.ok ? tr("سالم", "Healthy") : tr("در دسترس نیست؛ از کپی استفاده کن", "Unavailable; use copy"));
+          finish(out);
+        });
+      });
+    });
+  }
+  function term(c) {
+    var t = $("jx-term"); if (!t || !t.appendChild) return;
+    var p = document.createElement("p"), i = document.createElement("i"); i.textContent = "›"; p.appendChild(i);
+    var w = document.createElement("span"); w.className = c.s; w.textContent = "[" + (c.s === "ok" ? " ok " : c.s === "warn" ? "warn" : c.s === "bad" ? "fail" : " .. ") + "] "; p.appendChild(w);
+    var tx = document.createElement("span"); tx.className = "msg"; tx.textContent = c.t + (c.d ? " · " + c.d : ""); p.appendChild(tx);
+    t.appendChild(p);
+    for (var g = 0; g < 20 && t.children && t.children.length > 7; g++) { var f = t.children[0]; if (f && f.parentNode === t) t.removeChild(f); else break; }
+  }
+  function botSet(list) {
+    var bad = 0, warn = 0;
+    list.forEach(function (c) { if (c.s === "bad") bad++; else if (c.s === "warn") warn++; });
+    var av = $("jx-bav"), s = $("jx-bot-s"), t = $("jx-bot-t");
+    if (av) av.className = "bav" + (bad ? " bad" : warn ? " warn" : "");
+    if (s) s.textContent = bad ? bad + tr(" مشکل نیاز به توجه دارد", " issue(s) need attention") : warn ? warn + tr(" هشدار · بقیه سالم", " warning(s) · rest healthy") : tr("همه‌چیز سالم است", "Everything is healthy") + (CARE.healed ? tr(" · " + CARE.healed + " مورد رفع شد", " · " + CARE.healed + " fixed") : "");
+    if (t) t.textContent = new Date().toTimeString().slice(0, 5);
+  }
+  function diagnose(show, btn) {
+    if (CARE.busy) return; CARE.busy = true;
+    var av = $("jx-bav"); if (av) av.className = "bav run";
+    if (btn) btn.classList.add("busy");
+    var box = null
+    if (show) openSheet(tr("پشتیبان هوشمند · عیب‌یابی", "Smart support · diagnosis"), function (b) { box = document.createElement("div"); box.className = "chk"; b.appendChild(box); });
+    var row = function (c) {
+      if (!box) return;
+      var r = document.createElement("div"); r.className = "ck " + c.s;
+      var i = document.createElement("i"); i.textContent = BOT_ICO[c.s]; r.appendChild(i);
+      var g = document.createElement("span"); g.className = "grow";
+      var b = document.createElement("b"); b.textContent = c.t; g.appendChild(b);
+      var sm = document.createElement("small"); sm.textContent = c.d; g.appendChild(sm);
+      r.appendChild(g); box.appendChild(r);
+    };
+    term({ s: "run", t: "diagnose", d: new Date().toTimeString().slice(0, 8) });
+    checks(function (c) { row(c); term(c); }).then(function (list) {
+      CARE.busy = false; if (btn) btn.classList.remove("busy");
+      botSet(list);
+      if (show) { var bad = list.filter(function (c) { return c.s === "bad"; }).length; toast(bad ? tr("عیب‌یابی تمام شد", "Diagnosis finished") : tr("همه‌چیز سالم است", "Everything is healthy"), !!bad); if (!bad) flash(btn); }
+    });
+  }
+
+  /* smoothness watchdog: measure real frame rate once, switch to light mode on slow phones */
+  function fpsProbe() {
+    if (!window.requestAnimationFrame || document.hidden) return;
+    if (S.get("jx-lite") === "1") { root.classList.add("lite"); return; }
+    try {   /* weak phones / data saver: light mode from the very first frame (no stutter while measuring) */
+      var nv = navigator, cn = nv.connection || {};
+      if (cn.saveData || (nv.deviceMemory && nv.deviceMemory <= 2) || (nv.hardwareConcurrency && nv.hardwareConcurrency <= 2)) { root.classList.add("lite"); return; }
+    } catch (x) {}
+    var n = 0, t0 = 0, f = function (t) { if (!t0) t0 = t; n++; if (t - t0 < 1500) requestAnimationFrame(f); else {
+      CARE.fps = Math.round(n * 1000 / (t - t0));
+      if (CARE.fps < 32) { root.classList.add("lite"); S.set("jx-lite", "1"); CARE.healed++; term({ s: "warn", t: tr("حالت سبک", "Light mode"), d: CARE.fps + " fps" }); }
+    } };
+    requestAnimationFrame(f);
+  }
+  /* network + freshness watchdog */
+  window.addEventListener("offline", function () { toast(tr("اینترنت قطع شد", "You are offline"), true); term({ s: "bad", t: tr("اینترنت", "Internet"), d: tr("قطع", "offline") }); });
+  window.addEventListener("online", function () { toast(tr("اینترنت وصل شد", "Back online")); diagnose(false); });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && Date.now() - st.loadedAt > 3600000 && !$("sheet").classList.contains("on")) location.reload();   /* data older than 1h -> fresh copy */
+  });
+
+  boot(true);
+  setTimeout(fpsProbe, 2400);
+  setTimeout(function () { if (!appOk()) { if (!boot(false)) safeMode(); } }, 2500);   /* watchdog */
+  setTimeout(function () { diagnose(false); }, 600);
+  setInterval(function () { if (!document.hidden && !CARE.busy) diagnose(false); }, 120000);   /* re-check every 2 minutes */
+  window.JINX = { model: function () { return M; }, state: st, care: CARE, diagnose: diagnose };
+})();
+</script>
+</body>
+</html>
